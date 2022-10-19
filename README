@@ -1,0 +1,274 @@
+
+
+==============================================================================================
+=======  Trino data evaluation.  Pulling 'catalogs' 'schema' and 'tables' ====================
+=======  Data discovery and evaluation.  L-O-N-G runtimes; ~ 9 days.      ====================
+==============================================================================================
+
+
+trino_cst_0.pl (/home/scripts/TRINO/)
+---------------------------------------------------------------------------------------------------------------
+Automate the building of CST_ALL_0/catalog.schema.tables.txt files.  Taking the steam out of the original 
+'trino_cst_a.pl' and putting all the functionality into this 'trino_cst_0.pl' script.
+
+               |
+               |
+               V
+
+ CST_ALL_0/catalog.schema.tables.txt files
+
+               |
+               |
+               V
+
+trino_cst_1.pl (/home/scripts/TRINO/, ~23 hour runtime)
+---------------------------------------------------------------------------------------------------------------
+Read in 'schemas_all.txt' which are all catalog.schema found in TRINO; list is automatically developed by the 
+'trino_cst_0.pl' script.  Read 'dates.txt' file to define time frame of data gathering (not currently used and 
+really no need to have this here) and develop SQL query command and write SQL query command to file 
+(sqltesttest.txt).  Run system command for TRINO CLI with appropriate settings and credentials and write data 
+table outputs to CST_ALL/trino-$catalog_schema-tables.txt
+
+               |
+               |
+               V
+
+            CST_ALL/
+
+               |
+               |
+               V
+
+trino_cst_1a.pl (/home/scripts/TRINO/, very quick)
+---------------------------------------------------------------------------------------------------------------
+Remove files in CST_ALL/ that are less than 9 bytes; this indicates no data tables in the 'catalog.schema'
+
+               |
+               |
+               V
+
+            CST_ALL/
+
+               |
+               |
+               V
+
+trino_cst_2.pl (/home/scripts/TRINO/, TAKES LIKE 8 DAYS) 
+---------------------------------------------------------------------------------------------------------------
+Write directory listing of 'CST_ALL' to file 'tempcst.txt' then parse file into array (@cst).  For each item in 
+array, clean up naming using core data table name in SQL query command which gets written to 'sqlcmdcmd.txt'. 
+IF conditional, run system command TRINO CLI to pull example (100 rows) data tables to CST_EX_TABLES/$cst.csv
+
+               |
+               |
+               V
+
+         CST_EX_TABLES/ (~123000+ files)
+
+               |
+               |
+               V
+
+trino_cst_3.pl  (/home/scripts/TRINO/)
+---------------------------------------------------------------------------------------------------------------
+Write directory listing of 'CST_EX_TABLES' to file 'full_trino_list.txt'. Read 'full_trino_list.txt' and parse 
+by row and write cleaned up output to 'wc_trino_file_list.txt'.  Read 'wc_trino_file_list.txt' and parse rows 
+into data table name and create array of data table names (@dtables).  Read 'dates.txt' file to define time 
+frame of data gathering (not currently used).  For each item in @dtables, develop SQL query command and run 
+system command TRINO CLI with appropriate settings and credentials on each SQL query command and write output 
+data tables, 100000 rows each, to CST_TABLES/$dt.csv
+
+               |
+               |
+               V
+
+           CST_TABLES/ (~479 files)
+
+
+
+
+==============================================================================================
+======= After Trino data discovery, use specific data files to create ML useable data  =======
+======= 'all.pl' will run all scripts in this group.  1:45 - 2:15 runtimes.            =======
+==============================================================================================
+
+
+  ./joinfiles.txt	./dates.txt
+
+        |    \               |	
+        |     \              |
+        |      V             V
+        |
+        |     trino_10.pl (/home/scripts/TRINO/)
+        |     --------------------------------------------------------------------------------
+        |     Read in 'joinfiles.txt' which contains four rows with three fields separated by 
+        |     commas.  Each row contained a data table name (derived manually from an interactive 
+        |     TRINO_SHELL query), the chosen timestamp column name, and a list of chosen column 
+        |     names, separated with spaces.
+        |
+        |     Read in 'dates.txt' that defines specific days and create SQL command from 
+        |     'catalog.schema.table' and dates pulled from 'dates.txt' and pulling the defined columns.
+        |
+        |     Pull 'catalog.schema.table' on defined dates using the Trino CLI and write data 
+        |     table in CSV to CSV_NEW/ directory for each of the four defined data tables in 
+        |     'joinfiles.txt'
+        |
+        |           |                                  \                       |
+        |           |                                   \                      |
+        |           V                                    \                     V
+        |                                       
+        |   CSV_NEW/datatable_1	                    ./joinfiles.txt    CSV_NEW/datatable_3
+        |   CSV_NEW/datatable_2	                                       CSV_NEW/datatable_4
+        |                                                    \
+        |           |                                         \                |
+        |           |                                          \               |
+        V           V                                           V              V
+
+joined_0a.py (/home/scripts/TRINO/)			joined_0b.py (/home/scripts/TRINO/)
+--------------------------------------------		--------------------------------------------
+Read in two specific CSV filenames from                 Read in two specific CSV filenames from
+'joinfiles.txt' (a0, a1) and read in the defined        'joinfiles.txt' (bo, b1) and read in the defined
+files into two dataframes and modify column             files into two dataframes and modify column
+names to label right (_R) and left (_L)                 names to label right (_R) and left (_L)
+dataframes for the 'merge' operation.                   dataframes for the 'merge' operation.
+                                                        
+Perform a pd.merge operation on columns of              Perform a pd.merge operation on columns of
+interest; in the current case, account numbers.         interest; in the current case, account numbers.
+Write resulting dataframe to 'joined_0a.csv'            Write resulting dataframe to 'joined_0b.csv'
+
+               |								|
+               |								|
+               V								V
+
+         ./CSV/joined_0a.csv						./CSV/joined_0b.csv
+
+               |								|
+               |								|
+               V								V
+
+joined_1.py (/home/scripts/TRINO/)
+---------------------------------------------------------------------------------------------------------------
+Read in two CSV files, 'joined_0a.csv' and 'joined_0b.csv', and modify column names to label right (R) and 
+left (L) dataframes for the 'merge' operation; resulting column names will end in '_RR' or '_RL' or '_LL' or '_LR'
+
+Perform a pd.merge operation on common columns of interest; in the current case, account numbers. Drop the 
+columns formed by dataframe indexes in the merge operation, typically named 'Unnamed: '.  Drop duplicate rows 
+from merged, new dataframe. Drop specific columns listed in 'drop_cols' Python list.  Write resulting dataframe 
+to 'joined_1.csv'; also create a smaller dataframe file 'joined_1_200.csv' with only 200 rows for example purposes.
+
+               |			|
+               |			|
+               V			V
+
+         ./CSV/joined_1.csv	./CSV/joined_1_200.csv
+
+               |			\
+               |			 \
+               V			  --> (for analysis)
+
+joined_2.py (/home/scripts/TRINO/)
+---------------------------------------------------------------------------------------------------------------
+Read 'joined_1.csv' into dataframe.  Drop duplicate rows.  Drop specific columns in 'drop_cols' Python list.  
+Write updated dataframe to 'joined_2.csv'
+
+               |
+               |
+               V
+
+         ./CSV/joined_2.csv
+
+               |
+               |
+               V
+
+joined_3.py (/home/scripts/TRINO/)
+---------------------------------------------------------------------------------------------------------------
+Read 'joined_2.csv' into dataframe.  Drop columns that start with 'Unnamed'.  Drop duplicate rows.  Write 
+updated dataframe to 'joined_3.csv'
+
+               |
+               |
+               V
+
+         ./CSV/joined_3.csv
+
+               |
+               |
+               V
+
+joined_4.py (/home/scripts/TRINO/)
+---------------------------------------------------------------------------------------------------------------
+Read 'joined_3.csv' into dataframe.  Drop duplicate columns (e.g. date, account number, ticket id...).  Drop 
+columns that start with 'Unnamed'.  Write updated dataframe to 'joined_4.csv'
+
+      |                       |
+      |                       |
+      V                       V
+
+ ./CSV/joined_4.csv     ./CSV/joined_4.csv
+
+      |                       |
+      |                       |
+      |                       V
+      |
+      |      joined_5.py (/home/scripts/TRINO/)
+      |      --------------------------------------------
+      |      Read 'joined_4.csv' into dataframe.  Drop duplicate rows.  Pull one column that contains JSON 
+      |      data and create new dataframe.  Write single column dataframe to 'joined_5.csv'
+      |
+      |                     |
+      |                     |
+      |                     V
+      |
+      |               ./CSV/joined_5.csv
+      |
+      |                     |
+      |                     |
+      |                     V
+      |
+      |      joined_5.pl (/home/scripts/TRINO/)
+      |      --------------------------------------------
+      |      Open 'joined_5.csv' and read in line-by-line.  Parse JSON data and extract specific data into array. 
+      |      Print array to 'wo_0.csv'  
+      |
+      |                     |
+      |                     |
+      |                     V
+      |
+      |                 ./CSV/wo_0.csv
+      |
+      |                     |
+      |                     |
+      V                     V
+
+joined_6.py (/home/scripts/TRINO/)
+---------------------------------------------------------------------------------------------------------------
+Read 'joined_4.csv' and 'wo_0.csv' into dataframes.  Join the two dataframes horizontally.  Delete a number of 
+duplicate data columns.  Drop duplicate rows.  Rename columns to make the names more concise.  Write updated 
+dataframe to 'joined_6.csv'.  Copy 'joined_6.csv' to 'trino_ml.csv' for better recognition.
+
+               |
+               |
+               V
+
+         ./CSV/joined_6.csv ---------
+                                    |
+                                    |
+                                    V
+
+                          ./CSV/trino_ml.csv
+
+                                    |
+                                    |
+                                    V
+
+ML/XGB_< ML TRAINING MODEL >.py (/home/scripts/TRINO/ML, NEED TO RUN IN THE CONDA XGBOOST_ENV... NOT in all.pl script)
+---------------------------------------------------------------------------------------------------------------
+Read '../CSV/trino_ml.csv' into dataframe. Delete columns not used in machine learning as features. Encode 
+non-number features and write to new dataframe.  Write encoded dataframe to 'trino_encoded.csv'. 
+Break out 'X' and 'Y' data and write to NumPy arrays. Split data into train and test sets.  Fit model on training data. 
+Make predictions for test data. Evaluate predictions.  Output to STDOUT.
+
+
+
+
